@@ -5,7 +5,7 @@ This repository has the code used to build machine learning models to perform jo
 For details about how these models were built, or how they may be used for fuzzy joins, [see here](https://arxiv.org/abs/1809.01604).  All the models built using the techniques described in this paper are available at https://drive.google.com/drive/folders/1zivCTGkq2_AkfjGLHMnlehzTmYUwcQ9e.
 
 # Installation
-First make sure to install requirements.txt using pip.  Use Python3.
+First make sure to install requirements.txt using pip.  Use Python3.6.x.
 
 `pip install -r requirements.txt`
 
