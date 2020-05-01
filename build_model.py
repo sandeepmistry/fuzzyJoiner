@@ -477,8 +477,8 @@ def build_model(embedder):
                     lambda vects: K.stack(vects, axis=1),
                     name='stacked_dists', output_shape=(3, 1)
                     )([a_p, n_c])
-        model = Model([input_anchor, input_positive, input_negative], stacked_dists, name='triple_siamese')
-        model = multi_gpu_model(model, gpus=8)
+        original_model = Model([input_anchor, input_positive, input_negative], stacked_dists, name='triple_siamese')
+        model = multi_gpu_model(original_model, gpus=8)
         model.compile(optimizer="rmsprop", loss=angular_loss, metrics=[accuracy])
     else:
         exemplar_negative_dist = Lambda(euclidean_distance, name='exemplar_neg_dist', output_shape=(1,))([net_positive, net_negative])
@@ -488,8 +488,8 @@ def build_model(embedder):
                     name='stacked_dists', output_shape=(3, 1)
                     )([positive_dist, negative_dist, exemplar_negative_dist])
 
-        model = Model([input_anchor, input_positive, input_negative], stacked_dists, name='triple_siamese')
-        model = multi_gpu_model(model, gpus=8)
+        original_model = Model([input_anchor, input_positive, input_negative], stacked_dists, name='triple_siamese')
+        model = multi_gpu_model(original_model, gpus=8)
         model.compile(optimizer="rmsprop", loss=LOSS_FUNCTION, metrics=[accuracy])
     test_positive_model = Model([input_anchor, input_positive, input_negative], positive_dist)
     test_negative_model = Model([input_anchor, input_positive, input_negative], negative_dist)
@@ -501,7 +501,7 @@ def build_model(embedder):
     # print(exemplar_negative_dist)
     # print(neg_dist.output_shape)
 
-    return model, test_positive_model, test_negative_model, inter_model
+    return original_model, model, test_positive_model, test_negative_model, inter_model
 
 
 parser = argparse.ArgumentParser(description='Run fuzzy join algorithm')
@@ -610,7 +610,7 @@ sequences_validation = pad_sequences(sequences_validation, maxlen=MAX_SEQUENCE_L
 
 # build models
 embedder = get_embedding_layer(tokenizer)
-model, test_positive_model, test_negative_model, inter_model = build_model(embedder)
+orginal_model, model, test_positive_model, test_negative_model, inter_model = build_model(embedder)
 embedder_model = embedded_representation_model(embedder)
 
 
@@ -637,11 +637,22 @@ print("number of names" + str(number_of_names))
 Y_train = np.random.randint(2, size=(1,2,number_of_names)).T
 Y_val = np.random.randint(2, size=(1,2,len(validation_data['anchor']))).T
 
-checkpoint = ModelCheckpoint(filepath, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
+
+class OrginalModelCheckpoint(ModelCheckpoint):
+
+    def __init__(self, model, *args, **kwargs):
+        super(OrginalModelCheckpoint, self).__init__(*args, **kwargs)
+        self.model = model
+
+    def set_model(self, model):
+        """Set the model at instantiation."""
+        pass
+
+checkpoint = OrginalModelCheckpoint(orginal_model, filepath, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
 
 early_stop = EarlyStopping(monitor='val_accuracy', patience=2, mode='max')
 
-callbacks_list = [early_stop]
+callbacks_list = [checkpoint, early_stop]
 
 train_seq = get_sequences(train_data, tokenizer)
 
