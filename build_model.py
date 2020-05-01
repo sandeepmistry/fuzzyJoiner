@@ -18,6 +18,8 @@ from keras.layers import Conv1D, MaxPooling1D, Embedding
 
 from keras.models import Model, model_from_json, Sequential
 
+from keras.utils import multi_gpu_model
+
 from embeddings import KazumaCharEmbedding
 
 from annoy import AnnoyIndex
@@ -476,6 +478,7 @@ def build_model(embedder):
                     name='stacked_dists', output_shape=(3, 1)
                     )([a_p, n_c])
         model = Model([input_anchor, input_positive, input_negative], stacked_dists, name='triple_siamese')
+        model = multi_gpu_model(model, gpus=8)
         model.compile(optimizer="rmsprop", loss=angular_loss, metrics=[accuracy])
     else:
         exemplar_negative_dist = Lambda(euclidean_distance, name='exemplar_neg_dist', output_shape=(1,))([net_positive, net_negative])
@@ -486,6 +489,7 @@ def build_model(embedder):
                     )([positive_dist, negative_dist, exemplar_negative_dist])
 
         model = Model([input_anchor, input_positive, input_negative], stacked_dists, name='triple_siamese')
+        model = multi_gpu_model(model, gpus=8)
         model.compile(optimizer="rmsprop", loss=LOSS_FUNCTION, metrics=[accuracy])
     test_positive_model = Model([input_anchor, input_positive, input_negative], positive_dist)
     test_negative_model = Model([input_anchor, input_positive, input_negative], negative_dist)
@@ -637,12 +641,12 @@ checkpoint = ModelCheckpoint(filepath, monitor='val_accuracy', verbose=1, save_b
 
 early_stop = EarlyStopping(monitor='val_accuracy', patience=2, mode='max')
 
-callbacks_list = [checkpoint, early_stop]
+callbacks_list = [early_stop]
 
 train_seq = get_sequences(train_data, tokenizer)
 
 # check just for 5 epochs because this gets called many times
-model.fit([train_seq['anchor'], train_seq['positive'], train_seq['negative']], Y_train, epochs=100,  batch_size=40, callbacks=callbacks_list, validation_data=([validation_seq['anchor'], validation_seq['positive'], validation_seq['negative']],Y_val))
+model.fit([train_seq['anchor'], train_seq['positive'], train_seq['negative']], Y_train, epochs=100,  batch_size=(8 * 1024), callbacks=callbacks_list, validation_data=([validation_seq['anchor'], validation_seq['positive'], validation_seq['negative']],Y_val))
 current_model = inter_model
 # print some statistics on this epoch
 
